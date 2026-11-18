@@ -1,0 +1,32 @@
+PC RECEPTEUR (micro)
+====================
+
+1) Installation (une seule fois) :
+   pip install numpy scipy matplotlib sounddevice
+
+2) Reglages : desactiver la reduction de bruit / "ameliorations audio" du micro
+   (Parametres Windows > Son > micro > Proprietes).
+
+3) Pour chaque essai (lancer AVANT l'emetteur) :
+   python test_reel.py recevoir --M 4 --texte T1 --distance 1 --bruit calme
+
+   --M        : 2, 4, 8, 16 ou 32 (le MEME que sur l'emetteur)
+   --texte    : T1 a T5           (le MEME que sur l'emetteur)
+   --distance : en metres (0.5, 1, 2, 3)
+   --bruit    : calme ou musique
+
+   Chaque essai ajoute une ligne dans resultats_reels.csv
+   et sauvegarde le son capte dans le dossier enregistrements/.
+
+4) A la fin de la seance, pour faire le graphique du poster :
+   python analyse_reels.py
+   -> cree fig_tests_reels.png
+
+Reanalyser un enregistrement sauvegarde :
+   python test_reel.py analyser --M 4 --texte T1 --distance 1 --bruit calme --fichier enregistrements\NOM.wav
+
+MODE BOUCLE (un seul PC + un baffle)
+====================================
+Le baffle est la sortie son du PC, le micro du PC ecoute :
+   python test_reel.py boucle --M 4 --texte T1 --distance 1 --bruit calme
+(--distance = distance entre le baffle et le micro du PC)
