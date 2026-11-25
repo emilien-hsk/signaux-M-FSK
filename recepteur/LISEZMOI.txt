@@ -7,7 +7,7 @@ PC RECEPTEUR (micro)
 2) Reglages : desactiver la reduction de bruit / "ameliorations audio" du micro
    (Parametres Windows > Son > micro > Proprietes).
 
-3) Lancer l'ecoute UNE FOIS par configuration (M, distance, bruit) :
+3) Lancer l'ecoute :
    python test_reel.py ecouter --M 4 --distance 1 --bruit calme
 
    --M        : 2, 4, 8, 16 ou 32 (le MEME que sur l'emetteur)
@@ -16,12 +16,14 @@ PC RECEPTEUR (micro)
 
    - Attendre "Pret : en attente d'un message" (1 s de mesure du bruit ambiant,
      ne pas faire de bruit pendant ce temps).
-   - L'emetteur peut ensuite jouer autant de messages qu'il veut, quand il veut :
-     le recepteur detecte chaque message, le lit jusqu'au bout, reconnait
-     le texte (T1 a T5) et ecrit une ligne dans resultats_reels.csv.
+   - L'emetteur joue un message. Le recepteur le detecte, l'ecoute jusqu'au
+     SIGNAL DE FIN (son qui descend), reconnait le texte (T1 a T5), ecrit une
+     ligne dans resultats_reels.csv, puis S'ARRETE.
    - Le son capte est sauvegarde dans le dossier enregistrements/.
-   - Ctrl+C pour arreter. Relancer avec d'autres parametres pour changer
-     de M, de distance ou de bruit.
+
+   Pour une serie de tests sans relancer a chaque message, ajouter --continu :
+   python test_reel.py ecouter --M 4 --distance 1 --bruit calme --continu
+   (il reste a l'ecoute apres chaque message ; Ctrl+C pour arreter)
 
    Si les messages ne sont pas detectes (loin, son faible) : --sensibilite 1.8
    S'il se declenche tout seul (bruit) :                     --sensibilite 4

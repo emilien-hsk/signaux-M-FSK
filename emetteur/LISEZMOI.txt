@@ -12,4 +12,7 @@ PC EMETTEUR (haut-parleur)
    --M      : 2, 4, 8, 16 ou 32  (le MEME que celui donne au recepteur)
    --texte  : T1 a T5            (le recepteur le reconnait tout seul)
 
+   Le message se termine par un signal de fin (son qui descend) :
+   c'est lui qui dit au recepteur que le texte est fini.
+
 Textes : T1 Bonjour | T2 pangramme | T3 chiffres/symboles | T4 accents | T5 phrase longue

@@ -4,7 +4,8 @@ Paramètres (fixés en octobre) :
     fs = 44 100 Hz, Ts = 100 ms, f0 = 1000 Hz, pas = 100 Hz,
     préambule = chirp 500 -> 5000 Hz pendant 0,5 s.
 
-Trame émise : [chirp][silence 0,1 s][1 octet = longueur][message UTF-8]
+Trame émise : [chirp montant][silence 0,1 s][1 octet = longueur][message UTF-8]
+              [silence 0,1 s][chirp descendant = signal de fin]
 """
 import numpy as np
 from scipy.signal import chirp, correlate
@@ -16,11 +17,18 @@ DF = 100
 PRE_T = 0.5
 GAP_T = 0.1
 AMP = 0.8
+FIN_T = 0.3      # durée du signal de fin (chirp descendant 5000 -> 500 Hz)
 
 
 def preambule():
     t = np.arange(int(PRE_T * FS)) / FS
     return AMP * chirp(t, f0=500, t1=PRE_T, f1=5000) * np.hanning(len(t))
+
+
+def signal_fin():
+    """Signal de fin de message : chirp DESCENDANT, facile à distinguer du préambule montant."""
+    t = np.arange(int(FIN_T * FS)) / FS
+    return AMP * chirp(t, f0=5000, t1=FIN_T, f1=500) * np.hanning(len(t))
 
 
 def frequences(M):
@@ -70,7 +78,8 @@ def emettre(texte, M):
     rampe[-r:] = np.linspace(1, 0, r)
     f = frequences(M)
     tons = [AMP * np.sin(2 * np.pi * f[s] * t) * rampe for s in sym]
-    return np.concatenate([preambule(), np.zeros(int(GAP_T * FS))] + tons), sym
+    silence = np.zeros(int(GAP_T * FS))
+    return np.concatenate([preambule(), silence] + tons + [silence, signal_fin()]), sym
 
 
 # ---------- récepteur ----------
@@ -78,6 +87,24 @@ def trouver_debut(signal):
     pre = preambule()
     c = np.abs(correlate(signal, pre, mode="valid", method="fft"))
     return int(np.argmax(c)) + len(pre) + int(GAP_T * FS)
+
+
+def chercher_fin(signal, seuil=30.0):
+    """Cherche le signal de fin. Renvoie l'indice où il commence, ou None s'il n'est pas là.
+    Le pic de corrélation doit être nettement au-dessus du niveau typique (médiane)."""
+    fin = signal_fin()
+    if len(signal) < len(fin):
+        return None
+    c = np.abs(correlate(signal, fin, mode="valid", method="fft"))
+    pic = int(np.argmax(c))
+    if c[pic] < seuil * (np.median(c) + 1e-12):
+        return None
+    # ressemblance normalisée (0 à 1) : le chirp MONTANT du début ressemble peu au chirp descendant
+    seg = signal[pic:pic + len(fin)]
+    rho = c[pic] / (np.linalg.norm(fin) * np.linalg.norm(seg) + 1e-12)
+    if rho < 0.15:
+        return None
+    return pic
 
 
 def detecter_symboles(signal, M, debut, nb=None):
@@ -131,6 +158,9 @@ def _bornes_son(x):
     if len(actif) == 0:
         return None
     i0, i1 = actif[0] * pas, (actif[-1] + 1) * pas          # début et fin du son
+    f = chercher_fin(x)
+    if f is not None and f > i0:
+        i1 = f - int(GAP_T * FS)                             # fin des notes = juste avant le signal de fin
     return i0, i1
 
 

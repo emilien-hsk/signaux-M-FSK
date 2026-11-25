@@ -3,10 +3,11 @@
 PC émetteur (haut-parleur) : joue un texte du corpus
   python test_reel.py emettre --M 4 --texte T1
 
-PC récepteur (micro) : écoute en continu, sans savoir quel texte arrive
+PC récepteur (micro) : écoute sans savoir quel texte arrive
   python test_reel.py ecouter --M 4 --distance 1 --bruit calme
-  -> détecte chaque message, le lit jusqu'au bout grâce à l'octet de longueur,
-     reconnaît le texte du corpus, note le résultat. Ctrl+C pour arrêter.
+  -> détecte le message, l'écoute jusqu'au SIGNAL DE FIN (chirp descendant),
+     reconnaît le texte du corpus, note le résultat, puis s'arrête.
+  Ajouter --continu pour rester à l'écoute de plusieurs messages (Ctrl+C pour arrêter).
 
 Un seul PC + un baffle (joue et enregistre en même temps) :
   python test_reel.py boucle --M 4 --texte T1 --distance 1 --bruit calme
@@ -27,7 +28,7 @@ from scipy.io import wavfile
 from scipy.signal import butter, sosfilt, sosfilt_zi
 
 from mfsk import (FS, TS, emettre, trouver_debut_robuste, detecter_symboles,
-                  symboles_vers_bits, bits_vers_texte)
+                  symboles_vers_bits, bits_vers_texte, chercher_fin)
 
 CORPUS = {
     "T1": "Bonjour",
@@ -130,9 +131,9 @@ class Ecouteur:
     - Au repos, il mesure le niveau du bruit ambiant (médiane des 3 dernières secondes).
     - Un message commence quand le niveau dépasse `sensibilite` x le bruit pendant 100 ms.
       On garde aussi les 1,5 s précédentes pour ne pas perdre le chirp.
-    - Le message est fini quand le niveau médian des 0,8 dernières secondes
-      redescend près du bruit (silence après la dernière note),
-      ou au plus tard après la durée maximale d'un message (255 octets).
+    - Le message est fini dès que le SIGNAL DE FIN (chirp descendant) est entendu.
+      Secours si le micro l'a raté : le niveau médian des 0,8 dernières secondes
+      redescend près du bruit, ou la durée maximale d'un message (255 octets) est atteinte.
     """
     BLOC = int(0.05 * FS)
 
@@ -170,6 +171,8 @@ class Ecouteur:
                 self.capture = list(self.avant)
                 self.niveaux_capture = []
                 self.bruit_fige = self.bruit()
+                # le signal de fin ne peut pas être dans le son d'avant ni dans le chirp de départ
+                self.fin_min = sum(len(b) for b in self.capture) + int(0.5 * FS)
                 self.au_dessus = 0
                 return "debut"
             return None
@@ -177,9 +180,14 @@ class Ecouteur:
         self.capture.append(bloc)                   # --- message en cours
         self.niveaux_capture.append(niveau)
         taille = sum(len(b) for b in self.capture)
+        # signal de fin entendu dans les 2 dernières secondes ?
+        queue_son = np.concatenate(self.capture[-40:])
+        pos = chercher_fin(queue_son) if len(self.niveaux_capture) > 10 else None
+        fin_entendue = pos is not None and taille - len(queue_son) + pos >= self.fin_min
         recents = self.niveaux_capture[-16:]
         silence = len(self.niveaux_capture) > 30 and np.median(recents) < 1.6 * self.bruit_fige
-        if silence or taille >= self.duree_max:
+        if fin_entendue or silence or taille >= self.duree_max:
+            self.raison = "signal de fin" if fin_entendue else ("silence" if silence else "durée maximale")
             enreg = np.concatenate(self.capture)
             self.capture, self.niveaux_capture = None, None
             self.avant.clear()
@@ -195,7 +203,8 @@ def ecouter(args):
         file.put(indata[:, 0].copy())
 
     ec = Ecouteur(args.M, args.sensibilite)
-    print(f"Écoute en M = {args.M} ({args.distance} m, {args.bruit}). Mesure du bruit ambiant… (Ctrl+C pour arrêter)")
+    mode = "plusieurs messages, Ctrl+C pour arrêter" if args.continu else "s'arrête après un message"
+    print(f"Écoute en M = {args.M} ({args.distance} m, {args.bruit}) — {mode}. Mesure du bruit ambiant…")
     nb = 0
     with sd.InputStream(samplerate=FS, channels=1, dtype="float32", blocksize=Ecouteur.BLOC, callback=rappel):
         try:
@@ -209,12 +218,15 @@ def ecouter(args):
                     print("\nMessage détecté, réception…")
                 elif r is not None:
                     nb += 1
-                    print(f"Fin du message ({len(r) / FS:.1f} s enregistrées). Décodage…")
+                    print(f"Fin du message ({ec.raison}, {len(r) / FS:.1f} s enregistrées). Décodage…")
                     texte_id, recu, teb, tec = analyser(r, args.M)
                     chemin = sauver_wav(r, args.M, texte_id, args)
                     if np.max(np.abs(r)) > 0.99:
                         print("ATTENTION saturation : baissez le volume du haut-parleur.")
                     noter_et_afficher(args, texte_id, recu, teb, tec, chemin)
+                    if not args.continu:
+                        print("Écoute terminée.")
+                        return
                     print(f"\n[{nb} message(s) reçu(s)] En attente du suivant…")
         except KeyboardInterrupt:
             print(f"\nArrêt. {nb} message(s) reçu(s), résultats dans {FICHIER_CSV}.")
@@ -231,6 +243,8 @@ def main():
     p.add_argument("--bruit", default="calme")
     p.add_argument("--sensibilite", type=float, default=2.5,
                    help="ecouter : seuil de détection en multiple du bruit ambiant (plus bas = plus sensible)")
+    p.add_argument("--continu", action="store_true",
+                   help="ecouter : rester à l'écoute après chaque message (sinon s'arrête après le premier)")
     p.add_argument("--fichier", help="mode analyser : chemin du .wav")
     args = p.parse_args()
     if args.mode in ("emettre", "boucle") and args.texte is None:
