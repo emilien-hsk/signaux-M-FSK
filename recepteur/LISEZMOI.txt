@@ -32,11 +32,7 @@ PC RECEPTEUR (micro)
    python analyse_reels.py
    -> cree fig_tests_reels.png
 
-MODE BOUCLE (un seul PC + un baffle)
-====================================
-Le baffle est la sortie son du PC, le micro du PC ecoute :
-   python test_reel.py boucle --M 4 --texte T1 --distance 1 --bruit calme
-(--distance = distance entre le baffle et le micro du PC)
-
+REANALYSER UN ENREGISTREMENT
+============================
 Reanalyser un enregistrement sauvegarde (le texte est reconnu tout seul) :
    python test_reel.py analyser --M 4 --distance 1 --bruit calme --fichier enregistrements\NOM.wav

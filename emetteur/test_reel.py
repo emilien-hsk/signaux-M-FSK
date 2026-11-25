@@ -9,9 +9,6 @@ PC récepteur (micro) : écoute sans savoir quel texte arrive
      reconnaît le texte du corpus, note le résultat, puis s'arrête.
   Ajouter --continu pour rester à l'écoute de plusieurs messages (Ctrl+C pour arrêter).
 
-Un seul PC + un baffle (joue et enregistre en même temps) :
-  python test_reel.py boucle --M 4 --texte T1 --distance 1 --bruit calme
-
 Réanalyser un enregistrement sauvegardé (--texte facultatif) :
   python test_reel.py analyser --M 4 --distance 1 --bruit calme --fichier enregistrements/xxx.wav
 """
@@ -236,9 +233,9 @@ def ecouter(args):
 def main():
     sys.stdout.reconfigure(errors="replace")  # console Windows
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=["emettre", "ecouter", "boucle", "analyser"])
+    p.add_argument("mode", choices=["emettre", "ecouter", "analyser"])
     p.add_argument("--M", type=int, required=True, choices=[2, 4, 8, 16, 32])
-    p.add_argument("--texte", choices=list(CORPUS), help="obligatoire pour emettre et boucle")
+    p.add_argument("--texte", choices=list(CORPUS), help="obligatoire pour emettre")
     p.add_argument("--distance", type=float, default=1.0)
     p.add_argument("--bruit", default="calme")
     p.add_argument("--sensibilite", type=float, default=2.5,
@@ -247,7 +244,7 @@ def main():
                    help="ecouter : rester à l'écoute après chaque message (sinon s'arrête après le premier)")
     p.add_argument("--fichier", help="mode analyser : chemin du .wav")
     args = p.parse_args()
-    if args.mode in ("emettre", "boucle") and args.texte is None:
+    if args.mode == "emettre" and args.texte is None:
         p.error(f"le mode {args.mode} demande --texte (T1 à T5)")
 
     if args.mode == "ecouter":
@@ -265,26 +262,13 @@ def main():
         print("Terminé.")
         return
 
-    if args.mode == "boucle":
-        import sounddevice as sd
-        signal, _ = emettre(CORPUS[args.texte], args.M)
-        # un seul PC : joue sur le haut-parleur et enregistre le micro en même temps
-        a_jouer = np.concatenate([np.zeros(int(0.5 * FS)), signal, np.zeros(int(1.5 * FS))]).astype(np.float32)
-        print(f"Boucle : émission et enregistrement ({len(a_jouer) / FS:.1f} s)…")
-        enreg = sd.playrec(a_jouer, samplerate=FS, channels=1, dtype="float32")
-        sd.wait()
+    # mode analyser : relire un enregistrement sauvegardé
+    fs, enreg = wavfile.read(args.fichier)
+    enreg = enreg.astype(np.float64)
+    if enreg.ndim > 1:
         enreg = enreg[:, 0]
-        if np.max(np.abs(enreg)) > 0.99:
-            print("ATTENTION saturation : baissez le volume du haut-parleur.")
-        texte_id, recu, teb, tec = analyser(enreg, args.M, args.texte)
-        chemin = sauver_wav(enreg, args.M, texte_id, args)
-    else:  # analyser
-        fs, enreg = wavfile.read(args.fichier)
-        enreg = enreg.astype(np.float64)
-        if enreg.ndim > 1:
-            enreg = enreg[:, 0]
-        texte_id, recu, teb, tec = analyser(enreg, args.M, args.texte)
-        chemin = args.fichier
+    texte_id, recu, teb, tec = analyser(enreg, args.M, args.texte)
+    chemin = args.fichier
     noter_et_afficher(args, texte_id, recu, teb, tec, chemin)
 
 
