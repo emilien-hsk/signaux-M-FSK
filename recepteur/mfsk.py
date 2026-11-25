@@ -174,13 +174,25 @@ def synchro_par_notes(x, M):
 
 
 def trouver_debut_robuste(x, M):
-    """Essaie le chirp ; si le début trouvé n'annonce pas la bonne fin du son,
-    utilise la synchronisation par les notes. Renvoie (début, méthode)."""
+    """Choisit le début du message. Renvoie (début, méthode).
+    1) le chirp, si l'octet de longueur lu à cet endroit annonce bien la fin réelle du son ;
+    2) sinon la synchro par les notes (micro qui a coupé le chirp), si elle est cohérente ;
+    3) si aucune n'est confirmée (octet de longueur abîmé), celle où les notes sont les plus nettes."""
     n = int(TS * FS)
-    d = trouver_debut(x)
     bornes = _bornes_son(x)
-    fp = _fin_prevue(x, M, d)
-    if bornes is None or (fp is not None and abs(fp - bornes[1]) < n):
-        return d, "chirp"
-    d2 = synchro_par_notes(x, M)
-    return (d2, "notes") if d2 is not None else (d, "chirp")
+    d_c = trouver_debut(x)
+    if bornes is None:
+        return d_c, "chirp"
+
+    def coherent(d):
+        fp = _fin_prevue(x, M, d)
+        return fp is not None and abs(fp - bornes[1]) < n
+
+    if coherent(d_c):
+        return d_c, "chirp"
+    d_n = synchro_par_notes(x, M)
+    if d_n is not None and coherent(d_n):
+        return d_n, "notes"
+    if d_n is not None and _nettete(x, M, d_n, 10) > _nettete(x, M, d_c, 10) + 0.5:
+        return d_n, "notes (non confirmé)"
+    return d_c, "chirp (non confirmé)"

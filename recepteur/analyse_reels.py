@@ -12,6 +12,8 @@ SERIES = {2: "#2a78d6", 4: "#eb6834", 8: "#1baf7a", 16: "#eda100", 32: "#e87ba4"
 lignes = list(csv.DictReader(open("resultats_reels.csv", encoding="utf-8"), delimiter=";"))
 stats = defaultdict(list)  # (bruit, M, distance) -> [0/1, ...]
 for l in lignes:
+    if l["exact"] == "":   # texte hors corpus : pas de comparaison possible
+        continue
     stats[(l["bruit"], int(l["M"]), float(l["distance_m"]))].append(int(l["exact"]))
 
 bruits = sorted({k[0] for k in stats})

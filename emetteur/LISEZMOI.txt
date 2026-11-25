@@ -6,10 +6,10 @@ PC EMETTEUR (haut-parleur)
 
 2) Reglages : volume fixe (ex. 70 %), ne plus le changer pendant la seance.
 
-3) Pour chaque essai, quand le recepteur affiche "lancez l'emetteur MAINTENANT" :
+3) Pour chaque essai (le recepteur doit deja etre en mode "ecouter") :
    python test_reel.py emettre --M 4 --texte T1
 
-   --M      : 2, 4, 8, 16 ou 32  (le MEME que sur le recepteur)
-   --texte  : T1 a T5            (le MEME que sur le recepteur)
+   --M      : 2, 4, 8, 16 ou 32  (le MEME que celui donne au recepteur)
+   --texte  : T1 a T5            (le recepteur le reconnait tout seul)
 
 Textes : T1 Bonjour | T2 pangramme | T3 chiffres/symboles | T4 accents | T5 phrase longue

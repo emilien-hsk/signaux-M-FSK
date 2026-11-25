@@ -7,26 +7,34 @@ PC RECEPTEUR (micro)
 2) Reglages : desactiver la reduction de bruit / "ameliorations audio" du micro
    (Parametres Windows > Son > micro > Proprietes).
 
-3) Pour chaque essai (lancer AVANT l'emetteur) :
-   python test_reel.py recevoir --M 4 --texte T1 --distance 1 --bruit calme
+3) Lancer l'ecoute UNE FOIS par configuration (M, distance, bruit) :
+   python test_reel.py ecouter --M 4 --distance 1 --bruit calme
 
    --M        : 2, 4, 8, 16 ou 32 (le MEME que sur l'emetteur)
-   --texte    : T1 a T5           (le MEME que sur l'emetteur)
    --distance : en metres (0.5, 1, 2, 3)
    --bruit    : calme ou musique
 
-   Chaque essai ajoute une ligne dans resultats_reels.csv
-   et sauvegarde le son capte dans le dossier enregistrements/.
+   - Attendre "Pret : en attente d'un message" (1 s de mesure du bruit ambiant,
+     ne pas faire de bruit pendant ce temps).
+   - L'emetteur peut ensuite jouer autant de messages qu'il veut, quand il veut :
+     le recepteur detecte chaque message, le lit jusqu'au bout, reconnait
+     le texte (T1 a T5) et ecrit une ligne dans resultats_reels.csv.
+   - Le son capte est sauvegarde dans le dossier enregistrements/.
+   - Ctrl+C pour arreter. Relancer avec d'autres parametres pour changer
+     de M, de distance ou de bruit.
+
+   Si les messages ne sont pas detectes (loin, son faible) : --sensibilite 1.8
+   S'il se declenche tout seul (bruit) :                     --sensibilite 4
 
 4) A la fin de la seance, pour faire le graphique du poster :
    python analyse_reels.py
    -> cree fig_tests_reels.png
-
-Reanalyser un enregistrement sauvegarde :
-   python test_reel.py analyser --M 4 --texte T1 --distance 1 --bruit calme --fichier enregistrements\NOM.wav
 
 MODE BOUCLE (un seul PC + un baffle)
 ====================================
 Le baffle est la sortie son du PC, le micro du PC ecoute :
    python test_reel.py boucle --M 4 --texte T1 --distance 1 --bruit calme
 (--distance = distance entre le baffle et le micro du PC)
+
+Reanalyser un enregistrement sauvegarde (le texte est reconnu tout seul) :
+   python test_reel.py analyser --M 4 --distance 1 --bruit calme --fichier enregistrements\NOM.wav
