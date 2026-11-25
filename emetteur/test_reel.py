@@ -259,9 +259,9 @@ def ecouter(args):
                 if not annonce and ec.pret():
                     print(f"Prêt : en attente d'un message (bruit ambiant = {ec.bruit():.4f}).")
                     annonce = True
-                if r == "bruit":
+                if isinstance(r, str) and r == "bruit":   # r est un texte OU le tableau du son
                     print("(bruit ignoré : ce n'était pas un message)")
-                elif r == "debut":
+                elif isinstance(r, str) and r == "debut":
                     print("\nMessage détecté, réception…")
                 elif r is not None:
                     nb += 1
