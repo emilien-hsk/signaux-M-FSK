@@ -20,6 +20,9 @@ PC RECEPTEUR (micro)
      SIGNAL DE FIN (son qui descend), reconnait le texte (T1 a T5), ecrit une
      ligne dans resultats_reels.csv, puis S'ARRETE.
    - Le son capte est sauvegarde dans le dossier enregistrements/.
+   - Un bruit (porte, voix, claquement) peut declencher l'ecoute : apres 1 s,
+     le recepteur verifie si c'est un vrai message (chirp ou notes du modem).
+     Sinon il affiche "bruit ignore" et RESTE a l'ecoute.
 
    Pour une serie de tests sans relancer a chaque message, ajouter --continu :
    python test_reel.py ecouter --M 4 --distance 1 --bruit calme --continu

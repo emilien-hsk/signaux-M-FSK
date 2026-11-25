@@ -22,10 +22,11 @@ from datetime import datetime
 
 import numpy as np
 from scipy.io import wavfile
-from scipy.signal import butter, sosfilt, sosfilt_zi
+from scipy.signal import butter, correlate, sosfilt, sosfilt_zi
 
 from mfsk import (FS, TS, emettre, trouver_debut_robuste, detecter_symboles,
-                  symboles_vers_bits, bits_vers_texte, chercher_fin)
+                  symboles_vers_bits, bits_vers_texte, chercher_fin,
+                  preambule, frequences)
 
 CORPUS = {
     "T1": "Bonjour",
@@ -122,17 +123,52 @@ def noter_et_afficher(args, texte_id, recu, teb, tec, chemin_wav):
 # ======================================================================
 #  Écoute continue : détecte le début et la fin de chaque message
 # ======================================================================
+def ressemble_a_un_message(x, M):
+    """Vérifie qu'un son qui a déclenché l'écoute est bien un message M-FSK
+    et pas un bruit (claquement, voix, musique...).
+    1) on retrouve le chirp de départ (même test que pour le signal de fin) ;
+    2) sinon (Windows a coupé le chirp) : les 0,6 dernières secondes contiennent
+       des notes NETTES, posées exactement sur les fréquences du modem,
+       et au moins deux notes différentes (un sifflement tenu ne suffit pas)."""
+    pre = preambule()
+    if len(x) >= len(pre):
+        c = np.abs(correlate(x, pre, mode="valid", method="fft"))
+        pic = int(np.argmax(c))
+        seg = x[pic:pic + len(pre)]
+        rho = c[pic] / (np.linalg.norm(pre) * np.linalg.norm(seg) + 1e-12)
+        if c[pic] >= 30 * (np.median(c) + 1e-12) and rho >= 0.15:
+            return True
+    n = int(TS * FS)
+    f = np.fft.rfftfreq(n, 1 / FS)
+    bande = (f >= 400) & (f <= 5600)
+    notes = np.array([int(np.argmin(np.abs(f - fr))) for fr in frequences(M)])
+    fen = np.hanning(n)
+    fin = x[-int(0.6 * FS):]
+    nettes = []
+    for i in range(0, len(fin) - n + 1, n // 2):
+        p = np.abs(np.fft.rfft(fin[i:i + n] * fen)) ** 2
+        k = int(np.argmax(p[notes]))
+        j = notes[k]
+        # plus de la moitié de l'énergie de la bande est concentrée sur cette note
+        if p[j - 2:j + 3].sum() / (p[bande].sum() + 1e-20) > 0.5:
+            nettes.append(k)
+    return len(nettes) >= 3 and len(set(nettes)) >= 2
+
+
 class Ecouteur:
     """Reçoit le son du micro par blocs de 50 ms.
 
     - Au repos, il mesure le niveau du bruit ambiant (médiane des 3 dernières secondes).
-    - Un message commence quand le niveau dépasse `sensibilite` x le bruit pendant 100 ms.
+    - Un son commence quand le niveau dépasse `sensibilite` x le bruit pendant 100 ms.
       On garde aussi les 1,5 s précédentes pour ne pas perdre le chirp.
+    - 1 s plus tard, on VÉRIFIE que c'est bien un message (chirp ou notes du modem).
+      Sinon c'est un bruit : on l'ignore et on reste à l'écoute, sans rien perdre.
     - Le message est fini dès que le SIGNAL DE FIN (chirp descendant) est entendu.
       Secours si le micro l'a raté : le niveau médian des 0,8 dernières secondes
       redescend près du bruit, ou la durée maximale d'un message (255 octets) est atteinte.
     """
     BLOC = int(0.05 * FS)
+    VERIF = 20          # vérification après 20 blocs = 1 s
 
     def __init__(self, M, sensibilite=2.5):
         self.M, self.sens = M, sensibilite
@@ -171,11 +207,23 @@ class Ecouteur:
                 # le signal de fin ne peut pas être dans le son d'avant ni dans le chirp de départ
                 self.fin_min = sum(len(b) for b in self.capture) + int(0.5 * FS)
                 self.au_dessus = 0
-                return "debut"
+                self.confirme = False
+                return None
             return None
 
         self.capture.append(bloc)                   # --- message en cours
         self.niveaux_capture.append(niveau)
+        if not self.confirme:
+            if len(self.niveaux_capture) < self.VERIF:
+                return None
+            if ressemble_a_un_message(np.concatenate(self.capture), self.M):
+                self.confirme = True
+                return "debut"
+            # fausse alerte : on reprend l'écoute en gardant les 1,5 dernières secondes,
+            # au cas où le vrai message aurait commencé pendant la vérification
+            self.avant = deque(self.capture[-30:], maxlen=30)
+            self.capture, self.niveaux_capture = None, None
+            return "bruit"
         taille = sum(len(b) for b in self.capture)
         # signal de fin entendu dans les 2 dernières secondes ?
         queue_son = np.concatenate(self.capture[-40:])
@@ -211,7 +259,9 @@ def ecouter(args):
                 if not annonce and ec.pret():
                     print(f"Prêt : en attente d'un message (bruit ambiant = {ec.bruit():.4f}).")
                     annonce = True
-                if isinstance(r, str):
+                if r == "bruit":
+                    print("(bruit ignoré : ce n'était pas un message)")
+                elif r == "debut":
                     print("\nMessage détecté, réception…")
                 elif r is not None:
                     nb += 1
